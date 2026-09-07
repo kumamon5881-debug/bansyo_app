@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>カードモード</title>
+
+  <link rel="icon" href="favicon1.png" type="image/png">
+  <link rel="apple-touch-icon" href="favicon1.png">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #f2f2f2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .screen {
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      display: block;
+    }
+
+    .card-wrapper {
+      width: 100%;
+      max-width: 500px;
+      margin: 18px auto;
+      padding: 0 12px;
+      box-sizing: border-box;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .back-button,
+    .reset-btn {
+      font-size: 1.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+      line-height: 1;
+      padding: 6px 8px;
+    }
+
+    .card {
+      width: 100%;
+      min-height: 48vh;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 20px 14px;
+      line-height: 1.6;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      transition: all 160ms ease;
+      word-break: break-word;
+    }
+
+    .card.front {
+      align-items: flex-start;
+      text-align: left;
+      font-size: 18px;
+    }
+
+    .card.back {
+      align-items: center;
+      text-align: center;
+      font-size: 22px;
+    }
+
+    /* 問題画像スタイリング */
+    .card-img {
+      max-width: 100%;
+      max-height: 40vh;
+      object-fit: contain;
+      display: block;
+      margin: auto;
+    }
+
+    .progress {
+      font-size: 1.05rem;
+      color: #555;
+      text-align: center;
+      min-width: 56px;
+    }
+
+    .controls {
+      width: 100%;
+      max-width: 500px;
+      margin: 12px auto 0;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 0 12px;
+    }
+
+    .learned-btn {
+      background: #4CAF50;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 1.05rem;
+      border: none;
+      cursor: pointer;
+      user-select: none;
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .arrow-area {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 28px;
+      /* 5mm 程度下げる（約18px） */
+      margin-top: 18px;
+    }
+
+    .arrow {
+      font-size: 2.0rem;
+      font-weight: 800;
+      padding: 6px 12px;
+      cursor: pointer;
+      user-select: none;
+      background: transparent;
+      border-radius: 8px;
+      line-height: 1;
+    }
+    .arrow:active { transform: translateY(1px); }
+
+    /* 解説（音声）ボタン */
+    .explain-btn {
+      width: 100%;
+      max-width: 360px;
+      padding: 14px 18px;
+      font-size: 1.05rem;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      background: #1976d2;
+      color: #fff;
+      user-select: none;
+    }
+    .explain-btn[disabled] {
+      background: #ddd;
+      color: #888;
+      cursor: default;
+    }
+
+    @media (max-width: 480px) {
+      .card {
+        min-height: 50vh;
+        padding: 18px 12px;
+      }
+      .card.front { font-size: 18px; }
+      .card.back  { font-size: 22px; }
+      .arrow { font-size: 1.8rem; }
+      .learned-btn { padding: 12px 16px; font-size: 1rem; }
+      .explain-btn { padding: 12px 14px; font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="card-wrapper">
+
+      <div class="card-header">
+        <div class="back-button" id="btn-back">×</div>
+        <div class="reset-btn" onclick="resetExcluded()">↺</div>
+      </div>
+
+      <div id="card" class="card front" onclick="flipCard()">データを読み込んでいます...</div>
+
+      <div class="controls">
+        <button id="btn-learned" class="learned-btn">覚えた</button>
+
+        <div class="arrow-area">
+          <div class="arrow" onclick="prevCard()">◀</div>
+          <div id="progress" class="progress">0 / 0</div>
+          <div class="arrow" onclick="nextCard()">▶</div>
+        </div>
+
+        <!-- ここに大きめの解説ボタンを配置 -->
+        <button id="btn-explain" class="explain-btn" disabled>解説を再生</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    const urlParam = new URLSearchParams(window.location.search).get("url");
+
+    function materialIdFromUrl(url){
+      if(!url) return "default";
+      try{ return btoa(unescape(encodeURIComponent(url))).replace(/=+$/,""); }
+      catch(e){ return encodeURIComponent(url).replace(/[^a-zA-Z0-9]/g,'_'); }
+    }
+    const matId = materialIdFromUrl(urlParam);
+    /* 板書用の独立した除外データキー（V2） */
+    const EXCLUDED_KEY = `bansyo_excluded_${matId}_card_V2`; 
+
+    /* 進捗や wrong を使う場合は同様に V2 を使ってください（例）:
+       const PROGRESS_KEY = `bansyo_progress_${matId}_card_V2`;
+       const WRONG_KEY = `bansyo_wrong_${matId}_card_V2`;
+    */
+
+    let originalWords = [];
+    let words = [];        
+    let index = 0;
+    let showingFront = true;
+    let excluded = JSON.parse(localStorage.getItem(EXCLUDED_KEY) || "[]");
+
+    const cardEl = document.getElementById("card");
+    const progressEl = document.getElementById("progress");
+    const learnedBtn = document.getElementById("btn-learned");
+    const explainBtn = document.getElementById("btn-explain");
+
+    /* 戻るボタンの遷移先を index.html に直結 */
+    document.getElementById("btn-back").onclick = () => {
+      location.href = "index.html";
+    };
+
+    /* 現在のカードのオーディオオブジェクト（存在すれば） */
+    let currentAudio = null;
+
+    async function loadCSV() {
+      if (!urlParam) {
+        cardEl.textContent = "エラー：URLが指定されていません。";
+        return;
+      }
+
+      try {
+        const response = await fetch(urlParam);
+        if (!response.ok) throw new Error("通信エラー");
+        const text = await response.text();
+        
+        const lines = text.trim().split('\n');
+        originalWords = [];
+        for (let line of lines) {
+          line = line.trim();
+          if (!line) continue;
+          const parts = line.split(',');
+          
+          // A列: 裏（答え） / B列: JPEG問題(表) / C列: 文字列問題 / D列: 音声解説(MP3)
+          if (parts.length >= 1 && parts[0].trim() !== "") {
+            const ans = parts[0].trim();
+            const imgName = parts.length >= 2 ? parts[1].trim() : "#";
+            const qText = parts.length >= 3 ? parts[2].trim() : "#";
+            const audioName = parts.length >= 4 ? parts[3].trim() : "#";
+
+            // 列2が # 以外なら画像問題、それ以外はテキスト問題
+            const isImage = (imgName !== "#" && imgName !== "");
+            const qContent = isImage ? `monndai/${imgName}` : qText;
+
+            // 音声がある場合は相対パス（sound/）を想定、ない場合は null
+            const hasAudio = (audioName !== "#" && audioName !== "");
+            const audioPath = hasAudio ? `sound/${audioName}` : null;
+
+            originalWords.push({
+              isImage: isImage,
+              question: qContent,
+              answer: ans,
+              audio: audioPath
+            });
+          }
+        }
+        
+        words = originalWords.filter(item => !excluded.includes(item.answer));
+        updateCard();
+
+      } catch (error) {
+        console.error(error);
+        cardEl.textContent = "データの読み込みに失敗しました。";
+      }
+    }
+
+    function updateCard() {
+      // 停止中の音声があれば停止
+      if (currentAudio) {
+        try { currentAudio.pause(); currentAudio.currentTime = 0; } catch(e){}
+        currentAudio = null;
+      }
+
+      if (words.length === 0) {
+        cardEl.innerHTML = "すべて覚えました！";
+        progressEl.textContent = "";
+        explainBtn.disabled = true;
+        return;
+      }
+
+      if (index < 0) index = 0;
+      if (index >= words.length) index = words.length - 1;
+
+      const item = words[index];
+
+      if (showingFront) {
+        cardEl.classList.remove('back');
+        cardEl.classList.add('front');
+        if (item.isImage) {
+          cardEl.innerHTML = `<img src="${item.question}" alt="問題画像" class="card-img" />`;
+        } else {
+          cardEl.textContent = item.question;
+        }
+      } else {
+        cardEl.classList.remove('front');
+        cardEl.classList.add('back');
+        cardEl.textContent = item.answer;
+      }
+
+      progressEl.textContent = `${index + 1} / ${words.length}`;
+
+      // 音声ボタンの有効/無効を切り替え
+      if (item.audio) {
+        explainBtn.disabled = false;
+        explainBtn.textContent = "解説を再生";
+        // Audio オブジェクトは再生時に作る（ユーザー操作で再生）
+        currentAudio = null;
+      } else {
+        explainBtn.disabled = true;
+        explainBtn.textContent = "音声解説なし";
+        currentAudio = null;
+      }
+    }
+
+    function flipCard() {
+      if (words.length === 0) return;
+      showingFront = !showingFront;
+      updateCard();
+    }
+
+    function nextCard() {
+      if (words.length === 0) return;
+      if (index < words.length - 1) {
+        index++;
+        showingFront = true;
+        updateCard();
+      }
+    }
+
+    function prevCard() {
+      if (words.length === 0) return;
+      if (index > 0) {
+        index--;
+        showingFront = true;
+        updateCard();
+      }
+    }
+
+    learnedBtn.onclick = () => {
+      if (words.length === 0) return;
+      const item = words[index];
+      
+      excluded.push(item.answer);
+      localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excluded));
+      
+      words.splice(index, 1);
+      if (index >= words.length) index = words.length - 1;
+      showingFront = true;
+      updateCard();
+    };
+
+    function resetExcluded() {
+      if (!confirm("除外リストをリセットしますか？")) return;
+      localStorage.removeItem(EXCLUDED_KEY);
+      excluded = [];
+      words = originalWords.slice();
+      index = 0;
+      showingFront = true;
+      updateCard();
+      alert("除外リストをリセットしました");
+    }
+
+    // 解説ボタン（音声再生）
+    explainBtn.addEventListener("click", () => {
+      if (words.length === 0) return;
+      const item = words[index];
+      if (!item || !item.audio) return;
+
+      // 既に再生中なら停止
+      if (currentAudio && !currentAudio.paused) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        explainBtn.textContent = "解説を再生";
+        return;
+      }
+
+      // 新しく Audio を作って再生（ユーザー操作なので autoplay 制限に引っかからない）
+      try {
+        currentAudio = new Audio(item.audio);
+        currentAudio.play().then(() => {
+          explainBtn.textContent = "再生中（タップで停止）";
+        }).catch(err => {
+          console.error("再生エラー", err);
+          alert("音声の再生に失敗しました。ファイルが存在するか確認してください。");
+        });
+      } catch (e) {
+        console.error(e);
+        alert("音声の再生に失敗しました。");
+      }
+    });
+
+    document.addEventListener("DOMContentLoaded", loadCSV);
+  </script>
+</body>
+</html>
